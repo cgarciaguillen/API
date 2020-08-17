@@ -1,0 +1,524 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug  5 16:32:55 2020
+
+@author: cgarc
+"""
+
+from threading import Thread
+from ibapi.client import EClient
+from ibapi.wrapper import EWrapper
+from ibapi.utils import iswrapper
+from ibapi.contract import Contract
+from ibapi.order import Order
+from datetime import datetime
+import time
+
+
+
+
+
+class Algoritmo(EWrapper, EClient):
+    ''' Serves as the client and the wrapper '''
+
+    def __init__(self, addr, port, client_id):
+        EWrapper.__init__(self)
+        EClient.__init__(self, self)
+        self.funds = 0.0
+        self.datos_historicos = []
+        self.maximos = []
+        self.minimos = []
+        self.maximo_minuto = 0
+        self.minimo_minuto = 0
+        self.cierre_minuto = 0
+        self.order_id = 0
+        
+
+        # Connect to TWS
+        
+        self.connect(addr, port, client_id)
+
+        # Launch the client thread
+        thread = Thread(target=self.run)
+        thread.start()
+        
+    
+    @iswrapper
+    def accountSummary(self, req_id, acct, tag, val, currency):
+        ''' Called in response to reqAccountSummary '''
+
+        if tag == "AvailableFunds":
+            print("Account {}: available funds = {}".format(acct, val))
+            self.funds = float(val)
+            
+    @iswrapper
+    def historicalData(self, req_id, bar):
+        ''' Called in response to reqHistoricalData '''
+        
+        #print("Solicitando datos históricos")
+        
+        if req_id == 1:
+        
+            self.maximos.append(bar.high)
+            self.minimos.append(bar.low)
+            self.datos_historicos.append(bar)
+            #print("Solicitando datos históricos 1")
+            
+        if req_id == 2:
+            
+            self.maximo_minuto = bar.high
+            self.minimo_minuto = bar.low
+            self.cierre_minuto = bar.close
+            #print("Solicitando datos históricos 2")
+            
+    @iswrapper
+    def historicalDataEnd(self, req_id, start, end):
+        ''' Called after historical data has been received '''
+        
+        #print("HistoricalDataEnd. ReqId:", req_id, "from", start, "to", end)
+        
+    """        
+    @iswrapper
+    def openOrder(order_id, con, order, state):
+        ''' Called after order has been submitted '''
+
+        print('Status of {} order: {}'.format(con.symbol, state.status))
+    """    
+    
+    
+    @iswrapper
+    def orderStatus(self, order_id, status, filled, remaining,
+        avgFillPrice, permId, parentId, lastFillPrice, clientId,
+        whyHeld, mktCapPrice):
+        ''' Check the status of the subnitted order '''
+
+        print('Order status: {}'.format(status))
+    
+    @iswrapper
+    def position(acct, con, position, avgCost):
+        pass
+    
+    @iswrapper
+    def contractDetails(self, reqId, details):
+        ''' Obtain details for the contract '''
+        self.con_id = details.contract.conId
+        
+    @iswrapper
+    def nextValidId(self, order_id):
+        ''' Obtain an ID for the order '''
+        self.order_id = order_id
+    
+    
+    @iswrapper
+    def error(self, req_id, code, msg):
+        ''' Called if an error occurs '''
+
+        print('Error {} for request {}: {}'.format(code, req_id, msg))
+        
+        
+        
+
+
+def Solicitar_historicos(client):
+    con = Contract()
+    con.symbol = "EUR"
+    con.secType = "CASH"
+    con.exchange = "IDEALPRO"
+    con.currency = "USD"
+    
+    now = datetime.now().strftime("%Y%m%d, %H:%M:%S")
+    client.reqHistoricalData(1, con, now, "1441 S", "1 min",
+        "MIDPOINT", False, 1, False, [])
+    
+    time.sleep(3)
+    
+    
+    
+    #print("Máximos son", client.maximos)
+    #print("Mínimos son", client.minimos)
+    
+    return (client.maximos, client.minimos)
+
+    
+def Primeros(maximos, minimos):
+    primer_maximo = 0
+    primer_minimo = 0
+    cambio = False
+    for i in range(len(maximos)):
+        if cambio == False:
+    
+            primer_maximo = maximos[i]
+            primer_minimo = minimos[i]
+            cambio = True
+    
+    return(primer_maximo, primer_minimo)
+    
+
+def MaxMin(maximos, minimos):
+    
+    maximo=0
+    minimo=10
+    posicion_maximo=0
+    posicion_minimo=1
+    
+    for i in range (len(maximos)):
+        
+        
+        if maximos[i] > maximo:
+            maximo = maximos[i]
+            posicion_maximo = i
+        
+        if minimos[i] < minimo:
+            minimo = minimos[i]
+            posicion_minimo = i
+   
+    if posicion_maximo > posicion_minimo:
+        direccion="Ordenado"
+    
+    else:
+        direccion="Inverso"
+        
+    
+    
+    return(maximo, minimo, direccion)
+
+
+
+
+
+def Valores_Barrera(client):
+    con = Contract()
+    con.symbol = "EUR"
+    con.secType = "CASH"
+    con.exchange = "IDEALPRO"
+    con.currency = "USD"
+    
+    now = datetime.now().strftime("%Y%m%d, %H:%M:%S")
+    client.reqHistoricalData(2, con, now, "30 S", "30 secs",
+        "MIDPOINT", False, 1, False, [])
+    
+    time.sleep(3)
+
+    return (client.minimo_minuto, client.maximo_minuto, client.cierre_minuto)    
+
+
+
+
+def Barrera_entrada(client, maximos_totales, minimos_totales, direcciones_totales, 
+                    minimo_minuto, maximo_minuto, cierre_minuto, Habria_entrado):
+    
+    
+    
+    Entrada = False
+    precio = None
+    direccion = None
+    rango = None
+    
+    
+    
+    
+    
+    #print("Minimo minuto: ",minimo_minuto, "Maximo minuto :", 
+          #maximo_minuto, "Cierre minuto: ",cierre_minuto)
+    
+
+    
+    
+        
+    if Habria_entrado == False: #Para ver si entramos
+    
+        for i in range(len(maximos_totales)):
+        
+            if maximos_totales[i] != 0 and minimos_totales[i] != 0 and maximo_minuto != 0 and minimo_minuto != 0:
+         
+                if direcciones_totales[i] == "Ordenado":
+                    
+                    if maximos_totales[i] < maximo_minuto:
+                        maximos_totales[i] = maximo_minuto
+                        
+                    if minimos_totales[i] > minimo_minuto and Entrada == False:
+                        
+                        rango =  2* (maximos_totales[i] - minimo_minuto)
+                        
+                                                   
+                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            Entrada = True
+                            precio = cierre_minuto
+                            direccion = "Sube"
+                            Habria_entrado = True
+                            
+                    
+                    
+                            
+                elif direcciones_totales[i] == "Inverso":
+                    
+                    if minimos_totales[i] > minimo_minuto:
+                        minimos_totales[i] = minimo_minuto
+                        
+                    if maximos_totales[i] < maximo_minuto and Entrada == False:
+                        
+                        rango =  2* (maximo_minuto - minimos_totales[i])
+                        
+                                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            Entrada = True
+                            precio = cierre_minuto
+                            direccion = "Baja"
+                            Habria_entrado = True
+                            
+                            
+    elif Habria_entrado == True: #Para ver si entraría en la siguiente
+    
+        Habria_entrado = False
+        
+        print("Habria entrado True, no debería entrar")
+    
+        for i in range(len(maximos_totales)):
+        
+        
+            if maximos_totales[i] != 0 and minimos_totales[i] != 0 and maximo_minuto != 0 and minimo_minuto != 0:
+         
+                if direcciones_totales[i] == "Ordenado":
+                    
+                    if maximos_totales[i] < maximo_minuto:
+                        maximos_totales[i] = maximo_minuto
+                        
+                    if minimos_totales[i] > minimo_minuto:
+                        
+                        rango =  2* (maximos_totales[i] - minimo_minuto)
+                        
+                                                    
+                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            
+                            Habria_entrado = True
+                            
+                    
+                    
+                            
+                elif direcciones_totales[i] == "Inverso":
+                    
+                    if minimos_totales[i] > minimo_minuto:
+                        minimos_totales[i] = minimo_minuto
+                        
+                    if maximos_totales[i] < maximo_minuto:
+                        
+                        rango =  2* (maximo_minuto - minimos_totales[i])
+                        
+                                               
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            
+                            Habria_entrado = True
+                           
+                             
+                        
+                        
+                        
+    
+    
+    return(Entrada, precio, direccion, rango, Habria_entrado)
+
+
+
+
+             
+        
+def Ejecutar_orden(client, precio, direccion, rango):
+    
+    
+    con = Contract()
+    con.symbol = "EUR"
+    con.secType = "CASH"
+    con.exchange = "IDEALPRO"
+    con.currency = "USD"
+    
+    # Get unique ID for contract
+    client.reqContractDetails(0, con)
+    time.sleep(3)
+
+    
+    # Obtain an ID for the main order
+    client.reqIds(1000)
+    time.sleep(2)
+    
+    
+    qty = 100000
+    
+    if direccion == "Sube":
+        action = 'BUY'
+        lmt_price = round(precio + rango,4)
+        lmt_action = 'SELL'
+        stop_price = round(precio - rango,4)
+        stop_action = 'SELL'
+        print("Entramos esperando a que suba, a precio", precio, "y con rango", rango)
+        
+    elif direccion == "Baja":
+        action = 'SELL'
+        lmt_price = round(precio - rango,4)
+        lmt_action = 'BUY'
+        stop_price = round(precio + rango,4)
+        stop_action = 'BUY'
+        print("Entramos esperando a que baje, a precio", precio, "y con rango", rango)
+
+    print("LMT:", lmt_price, "STOP:", stop_price)
+    
+    
+    
+    # Create the bracket order
+    main_order = Order()
+    main_order.orderId = client.order_id
+    main_order.action = action
+    main_order.orderType = 'MKT'
+    main_order.totalQuantity = qty
+    main_order.transmit = False
+  
+
+    
+
+    # First child order - limit order
+    first_child = Order()
+    first_child.orderId = client.order_id + 1
+    first_child.action = lmt_action
+    first_child.orderType = 'LMT'
+    first_child.totalQuantity = qty
+    first_child.lmtPrice = lmt_price
+    first_child.parentId = client.order_id
+    first_child.transmit = False
+
+    # Stop order child
+    second_child = Order()
+    second_child.orderId = client.order_id + 2
+    second_child.action = stop_action
+    second_child.orderType = 'STP'
+    second_child.totalQuantity = qty
+    second_child.auxPrice = stop_price
+    second_child.parentId = client.order_id
+    second_child.transmit = True
+
+    # Submit each order
+    client.placeOrder(client.order_id, con, main_order)
+    client.placeOrder(client.order_id+1, con, first_child)
+    client.placeOrder(client.order_id+2, con, second_child)
+
+     # Sleep while the request is processed
+    time.sleep(5)
+    #client.disconnect()
+    
+
+maximos_totales = 25*[None]
+minimos_totales = 25*[None]
+direcciones_totales = 25*[None]
+primeros_maximos = 25*[None]
+primeros_minimos = 25*[None]
+
+def main(maximos_totales, minimos_totales, direcciones_totales, primeros_maximos, primeros_minimos, Habria_entrado):
+    
+    
+    
+    # Create the client and connect to TWS
+    client = Algoritmo('127.0.0.1', 7497, 0)
+    #client = Algoritmo('127.0.0.1', 4002, 0)
+    
+    
+    # Access available funds
+    client.reqAccountSummary(0, "All", "AvailableFunds")
+    time.sleep(1)
+    client.cancelAccountSummary(0)
+    
+    #print("Habria entrado original es ", Habria_entrado)
+    
+    
+    maximos, minimos = Solicitar_historicos(client) #Pedir X minutos previos los datos
+    #print("Datos históricos obtenidos")
+    #print(maximos)
+    #print(minimos)
+    
+    time.sleep(0.1)
+    
+    #print("Longitud=",len(maximos))
+    
+    if len(maximos) != 0:
+        
+    
+        primer_maximo, primer_minimo = Primeros(maximos, minimos)
+        #Nos da el primer punto
+        
+        maximo, minimo, direccion = MaxMin(maximos, minimos)
+        #Nos da el máximo y el mínimo y hacia donde va con los históricos de antes
+        #print("El máximo es ", maximo, ", el mínimo es ", minimo, " y es ", direccion)
+        
+        
+        if primer_maximo == primeros_maximos [24] and primer_minimo == primeros_minimos [24] :
+            print("Ignoramos")
+            
+        elif maximo != 0 and minimo !=0:
+            maximos_totales.append(maximo) #Lista con ese valor como el último
+            minimos_totales.append(minimo) #Lista con ese valor como el último
+            direcciones_totales.append(direccion) #Lista con el orden a seguir
+            maximos_totales.pop(0) #Quitamos los primeros (hace ya X minutos que pasaron 
+            minimos_totales.pop(0) #y ya no sirven)
+            direcciones_totales.pop(0)
+            
+            primeros_maximos.append(primer_maximo)
+            primeros_minimos.append(primer_minimo)
+            primeros_maximos.pop(0)
+            primeros_minimos.pop(0)
+            
+        #print("Máximo: ",maximo)
+        #print("Mínimo: ", minimo)
+        #print("Máximos totales:", maximos_totales)
+        #print("Mínimos totales:",minimos_totales) #Me fallan
+        print("Direcciones:", direcciones_totales)
+        
+        minimo_minuto, maximo_minuto, cierre_minuto = Valores_Barrera(client)
+        
+        #Entramos con los datos y vemos si el nuevo cumple. Solo va a cumplir una vez, no más.   
+        Entrada, precio, direccion, rango, Habria_entrado = Barrera_entrada(client, maximos_totales, 
+                                                            minimos_totales, 
+                                                            direcciones_totales, 
+                                                            minimo_minuto, maximo_minuto, 
+                                                            cierre_minuto, Habria_entrado)
+        
+        #print("Entrada:",Entrada, "Precio:",precio, "Dirección:", direccion, "Rango:", rango)
+        
+        #print("Habria entrado", Habria_entrado)
+        
+        
+        if Entrada == True:
+            
+            Ejecutar_orden(client, precio, direccion, rango)
+            Habria_entrado = True
+            
+        time.sleep(15)
+        
+        
+     
+      
+    
+    # Disconnect from TWS
+    client.disconnect()
+    
+    return(maximos_totales, minimos_totales, direcciones_totales, 
+           primeros_maximos, primeros_minimos, Habria_entrado)
+
+
+
+Operando = True
+Habria_entrado = True
+while Operando:
+    time.sleep(0.1)
+    if __name__ == '__main__':
+        maximos_totales, minimos_totales, direcciones_totales, primeros_maximos, primeros_minimos, Habria_entrado = main(maximos_totales, minimos_totales, direcciones_totales, primeros_maximos, primeros_minimos, Habria_entrado)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
