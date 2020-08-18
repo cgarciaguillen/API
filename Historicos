@@ -1,0 +1,416 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Aug 17 16:20:21 2020
+
+@author: chach
+"""
+
+import pandas as pd
+#import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+#from numba import njit
+from time import time
+
+"""
+#datos_df_ask=pd.read_csv("EURUSD_Candlestick_1_M_ASK_10.08.2020-15.08.2020.csv")
+#datos_df_bid=pd.read_csv("EURUSD_Candlestick_1_M_BID_10.08.2020-15.08.2020.csv")
+datos_df_ask=pd.read_csv("EURUSD_UTC_1 Min_Ask_2003.05.04_2017.01.20.csv")
+datos_df_bid=pd.read_csv("EURUSD_UTC_1 Min_Bid_2003.05.04_2017.01.20.csv")
+
+
+datos_ask=np.zeros((datos_df_ask.shape[0],4))
+datos_bid=np.zeros((datos_df_bid.shape[0],4))
+
+for i in range (datos_ask.shape[0]):
+    for j in range (4):
+        datos_ask[i][j]=datos_df_ask.iloc[i,j+1]
+        datos_bid[i][j]=datos_df_bid.iloc[i,j+1]
+     
+tac=time()  
+print("El tiempo de crear la matriz y leer los datos ha sido",tac-tic) 
+
+
+        
+rolls = 150
+rang = 0.25
+
+def Solicitar_historicos(i, rolls, datos_ask):
+    
+    maximos = rolls*[None]
+    minimos = rolls*[None]
+    
+    
+    for j in range (rolls):
+        maximos[j] = datos_ask [i - rolls + j, 1]
+        
+        minimos[j] = datos_ask [i - rolls + j, 2]
+        
+
+    return (maximos, minimos)
+
+    
+    
+
+def MaxMin(maximos, minimos):
+    
+    maximo=0
+    minimo=10
+    posicion_maximo=0
+    posicion_minimo=1
+    
+    for i in range (len(maximos)):
+        
+        
+        if maximos[i] > maximo:
+            maximo = maximos[i]
+            posicion_maximo = i
+        
+        if minimos[i] < minimo:
+            minimo = minimos[i]
+            posicion_minimo = i
+   
+    if posicion_maximo > posicion_minimo:
+        direccion="Ordenado"
+    
+    else:
+        direccion="Inverso"
+        
+    
+    
+    return(maximo, minimo, direccion)
+
+
+
+
+
+def Valores_Barrera(i, rolls, datos_ask):
+    
+    minimo_minuto = datos_ask[i, 2]
+    maximo_minuto = datos_ask[i, 1]
+    cierre_minuto = datos_ask[i, 3]
+
+    return (minimo_minuto, maximo_minuto, cierre_minuto)    
+
+
+
+
+def Barrera_entrada(maximos_totales, minimos_totales, direcciones_totales, minimo_minuto, maximo_minuto, cierre_minuto, Habria_entrado, rang):
+    
+        
+    Entrada = False
+    precio = None
+    direccion = None
+    rango = None
+    
+    
+    
+        
+    if Habria_entrado == False: #Para ver si entramos
+    
+        for k in range(len(maximos_totales)):
+        
+            if maximos_totales[k] != 0 and minimos_totales[k] != 0 and maximo_minuto != 0 and minimo_minuto != 0:
+         
+                if direcciones_totales[k] == "Ordenado":
+                    
+                    if maximos_totales[k] < maximo_minuto:
+                        maximos_totales[k] = maximo_minuto
+                        
+                    if minimos_totales[k] > minimo_minuto and Entrada == False:
+                        
+                        rango =  rang* (maximos_totales[k] - minimo_minuto)
+                        
+                                                   
+                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            Entrada = True
+                            precio = cierre_minuto
+                            direccion = "Sube"
+                            Habria_entrado = True
+                            
+                    
+                    
+                            
+                elif direcciones_totales[k] == "Inverso":
+                    
+                    if minimos_totales[k] > minimo_minuto:
+                        minimos_totales[k] = minimo_minuto
+                        
+                    if maximos_totales[k] < maximo_minuto and Entrada == False:
+                        
+                        rango =  rang* (maximo_minuto - minimos_totales[k])
+                        
+                                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            Entrada = True
+                            precio = cierre_minuto
+                            direccion = "Baja"
+                            Habria_entrado = True
+                            
+                            
+    elif Habria_entrado == True: #Para ver si entraría en la siguiente
+    
+        Habria_entrado = False
+        
+        #print("Habria entrado True, no debería entrar")
+    
+        for k in range(len(maximos_totales)):
+        
+        
+            if maximos_totales[k] != 0 and minimos_totales[k] != 0 and maximo_minuto != 0 and minimo_minuto != 0:
+         
+                if direcciones_totales[k] == "Ordenado":
+                    
+                    if maximos_totales[k] < maximo_minuto:
+                        maximos_totales[k] = maximo_minuto
+                        
+                    if minimos_totales[k] > minimo_minuto:
+                        
+                        rango =  rang* (maximos_totales[k] - minimo_minuto)
+                        
+                                                    
+                            
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            
+                            Habria_entrado = True
+                            
+                    
+                    
+                            
+                elif direcciones_totales[k] == "Inverso":
+                    
+                    if minimos_totales[k] > minimo_minuto:
+                        minimos_totales[k] = minimo_minuto
+                        
+                    if maximos_totales[k] < maximo_minuto:
+                        
+                        rango =  rang* (maximo_minuto - minimos_totales[k])
+                        
+                        #print(rango)
+                                               
+                        if rango > 1.6/10000: #Aprox 2*(comision+spread)
+                            
+                            Habria_entrado = True
+                           
+                             
+                      
+    
+    
+    return(Entrada, precio, direccion, rango, Habria_entrado)
+
+
+
+
+             
+        
+def Ejecutar_orden(precio, direccion, rango, ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, sube, baja):
+    
+    
+  
+    if direccion == "Sube":
+        #action = 'BUY'
+        lmt_price = round(precio + rango,4)
+        #lmt_action = 'SELL'
+        stop_price = round(precio - rango,4)
+        #stop_action = 'SELL'
+        #print("Entramos esperando a que suba, a precio", precio, "y con rango", rango)
+        #print("Entramos esperando a que suba, a precio", precio, "lmt", lmt_price, "stop", stop_price)
+        ordenes_limit_sube.append(lmt_price)
+        ordenes_stop_sube.append(stop_price)
+        ordenes_rango_sube.append(rango)
+        sube +=1
+        
+        
+        
+    elif direccion == "Baja":
+        #action = 'SELL'
+        lmt_price = round(precio - rango,4)
+        #lmt_action = 'BUY'
+        stop_price = round(precio + rango,4)
+        #stop_action = 'BUY'
+        #print("Entramos esperando a que baje, a precio", precio, "y con rango", rango)
+        ordenes_limit_baja.append(lmt_price)
+        ordenes_stop_baja.append(stop_price)
+        ordenes_rango_baja.append(rango)
+        baja +=1
+        
+        
+    #print("LMT:", lmt_price, "STOP:", stop_price)
+    
+    return (ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, sube, baja)
+    
+    
+  
+def comprobar_salida(minimo_minuto, maximo_minuto, ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, equity, win, lose, equity_representar):
+    #Esta es la más nueva e inventada
+    
+    ejecutadas_sube = []
+    ejecutadas_baja = []
+    
+    if len(ordenes_limit_sube) != 0:
+    
+        for m in range (len (ordenes_limit_sube)): #TP en subida
+            
+            if ordenes_stop_sube[m] >= minimo_minuto:
+                equity -= ordenes_rango_sube [m]
+                equity_representar.append(equity)
+                lose +=1
+                ejecutadas_sube.append(m)
+                #print("minimo_minuto", minimo_minuto)
+                #print("maximo_minuto", maximo_minuto)
+            
+            elif ordenes_limit_sube[m] <= maximo_minuto:
+                equity += ordenes_rango_sube[m]
+                equity_representar.append(equity)
+                win += 1
+                ejecutadas_sube.append(m)
+                
+            
+            
+        
+        #print  (ejecutadas_sube)
+        
+        for mm in reversed(ejecutadas_sube):
+            ordenes_limit_sube.pop(mm)
+            ordenes_stop_sube.pop(mm)
+            ordenes_rango_sube.pop(mm)
+                
+    if len(ordenes_limit_baja) != 0:
+            
+        for m in range (len (ordenes_limit_baja)): #TP en subida
+            
+            if ordenes_stop_baja[m] <= minimo_minuto:
+                equity -= ordenes_rango_baja [m]
+                equity_representar.append(equity)
+                lose +=1
+                ejecutadas_baja.append(m)
+                #print("Adios")
+            
+            elif ordenes_limit_baja[m] >= minimo_minuto:
+                equity += ordenes_rango_baja[m]
+                equity_representar.append(equity)
+                win += 1
+                ejecutadas_baja.append(m)
+                #print("Hola")
+                
+                
+        #print(ejecutadas_baja)
+        
+        for mm in reversed(ejecutadas_baja):
+            
+            ordenes_limit_baja.pop(mm)
+            ordenes_stop_baja.pop(mm)
+            ordenes_rango_baja.pop(mm)
+            
+    
+                
+    return(equity, win, lose, ordenes_limit_sube, ordenes_stop_sube, ordenes_rango_sube, ordenes_limit_baja, ordenes_stop_baja, ordenes_rango_baja, equity_representar)
+
+    
+    
+    
+"""""""""""""""""""""""""""""""""""""""""
+
+
+"""""""""""""""""""""""""""""""""""""""""
+    
+
+equity = 0
+win = 0
+lose = 0
+sube = 0
+baja = 0
+
+maximos_totales = rolls*[None]
+minimos_totales = rolls*[None]
+direcciones_totales = rolls*[None]
+Habria_entrado = True
+ordenes_limit_sube = []
+ordenes_limit_baja = []
+ordenes_stop_sube = []
+ordenes_stop_baja = [] 
+ordenes_rango_sube = [] 
+ordenes_rango_baja = []
+equity_representar = []
+
+for i in range (rolls, len(datos_ask)):
+    
+          
+    maximos, minimos = Solicitar_historicos(i, rolls, datos_ask) #Pedir X minutos previos los datos
+    
+      
+        
+    maximo, minimo, direccion = MaxMin(maximos, minimos)
+    #Nos da el máximo y el mínimo y hacia donde va con los históricos de antes
+    #print("El máximo es ", maximo, ", el mínimo es ", minimo, " y es ", direccion)
+    
+    
+    
+        
+    maximos_totales.append(maximo) #Lista con ese valor como el último
+    minimos_totales.append(minimo) #Lista con ese valor como el último
+    direcciones_totales.append(direccion) #Lista con el orden a seguir
+    maximos_totales.pop(0) #Quitamos los primeros (hace ya X minutos que pasaron 
+    minimos_totales.pop(0) #y ya no sirven)
+    direcciones_totales.pop(0)
+          
+    
+    
+    minimo_minuto, maximo_minuto, cierre_minuto = Valores_Barrera(i, rolls, datos_ask)
+    
+    #Entramos con los datos y vemos si el nuevo cumple. Solo va a cumplir una vez, no más.   
+    Entrada, precio, direccion, rango, Habria_entrado = Barrera_entrada(maximos_totales, minimos_totales, direcciones_totales, minimo_minuto, maximo_minuto, cierre_minuto, Habria_entrado, rang)
+    
+    
+    
+    
+    if Entrada == True:
+        
+        ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, sube, baja= Ejecutar_orden(precio, direccion, rango, ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, sube, baja)
+        Habria_entrado = True
+        
+    
+    equity, win, lose, ordenes_limit_sube, ordenes_stop_sube, ordenes_rango_sube, ordenes_limit_baja, ordenes_stop_baja, ordenes_rango_baja, equity_representar = comprobar_salida(minimo_minuto, maximo_minuto, ordenes_limit_sube, ordenes_limit_baja, ordenes_stop_sube, ordenes_stop_baja, ordenes_rango_sube, ordenes_rango_baja, equity, win, lose, equity_representar)
+    
+ 
+    
+    
+equity_representar_=np.zeros(len(equity_representar))
+
+for i in range (len(equity_representar_)):
+    equity_representar_[i]=equity_representar[i]
+    
+sns.lineplot(data=equity_representar_,label="Equity")
+
+print("Win Ratio:", win/(win+lose) )
+print("Equity:", equity)
+print("Operaciones:", win+lose)
+    
+#print("Sube:", sube, "Baja:", baja)  
+
+
+
+"""
+
+maximo_equity = 0
+MDD = 0
+
+for equityy in equity_representar:
+    
+    maximo_equity = max (maximo_equity, equityy)
+            
+    if equityy < maximo_equity:
+        DD = maximo_equity-equityy
+        
+        if DD > MDD:
+             MDD = DD
+
+print("Con ", rolls, "rolls y con un rango de ",rang)
+print("Win Ratio:", win/(win+lose) )
+print("Equity:", equity)
+print("Operaciones:", win+lose)
+print("CALMAR:", equity/MDD)    
+print("MDD:", MDD)
+    
+sns.lineplot(data=equity_representar_,label="Equity")
